@@ -772,7 +772,7 @@ bun run build       # next build → exits 0, no warnings
 N/A — no agent code in this feature.
 # Tasks
 
-- [ ] Scaffold Next.js 16 project with config files, globals.css, lib helpers, and layout shell
+- [x] Scaffold Next.js 16 project with config files, globals.css, lib helpers, and layout shell
   **Context:** Fresh Next.js 16 app at worktree root `/Users/alawrence/.retro/worktrees/initial-build/`. No code exists yet — only `design/reference/` (source CSS + JSX prototype) and `specs/`. Port `design/reference/styles.css` verbatim to `app/globals.css` with documented additions. Reference TUI repo (read-only): `/Users/alawrence/.retro/references/initial-build/retrospeced-tui`.
   **Files to create:**
   - `package.json` — deps: `next@^16 react@^19 react-dom@^19 lucide-react @vercel/analytics @vercel/speed-insights`; dev: `typescript @types/react @types/react-dom @types/node eslint eslint-config-next`. Scripts: `dev: "next dev --turbopack"`, `build: "next build"`, `start: "next start"`, `lint: "next lint"`, `typecheck: "tsc --noEmit"`.
@@ -1062,3 +1062,13 @@ N/A — no agent code in this feature.
 - **Start:**
 - **Stop:**
 - **Continue:**
+
+## Task 1 — Scaffold
+
+- `tsconfig.json` `jsx` ends up `"react-jsx"` despite spec saying `"preserve"`. Next.js 16 auto-rewrites this on build ("mandatory change") because Next uses React automatic runtime. Left at `react-jsx` to avoid fighting the framework on every build.
+- `THEME_INIT_SCRIPT` ends up AFTER the `<link rel="stylesheet">` in built HTML, not before. React 19's built-in stylesheet hoisting (via `data-precedence`) pushes the CSS bundle to the top of `<head>` regardless of JSX order. Tried `next/script` with `strategy="beforeInteractive"` — same result. Practical impact is minimal: `<html>` already carries the default `data-theme="dark" data-accent="orange" data-scanlines="on"`, so default-state users see no flash; only users who have saved a non-default preference to localStorage may see a brief flash before the inline script runs (HTML spec still blocks inline scripts until preceding stylesheets load). Noting as known limitation of Next 16 + React 19.
+- Spec's reduced-motion block targets `html::before` for scanline disable, but the scanline overlay actually lives on `body::before` in `styles.css`. Followed spec literally (`html::before { display: none !important; }`). Result: reduced-motion disables animations/transitions globally but does NOT hide the scanline overlay. If hiding the scanline under reduced-motion is desired, the selector should be `body::before` — flagging for later correction.
+- OG image (`public/og.png`) deferred — no 1200×630 asset produced in-task. Left `public/.gitkeep`; metadata still references `/og.png` so a placeholder/final image must land before production deploy.
+- `eslint-config-next` v16 flat config imported as default exports from `eslint-config-next/core-web-vitals` and `eslint-config-next/typescript` subpaths (matches Next 16 docs). Added `design/reference/**` to ignores so the prototype JSX doesn't block lint.
+- `tsconfig.json` `include` also has `.next/dev/types/**/*.ts` (not in spec); kept — harmless and matches what `next build`/Turbopack generate.
+- `bun install` / `bun run typecheck` / `bun run lint` / `bun run build` all exit 0 against Next 16.2.4 + React 19.
