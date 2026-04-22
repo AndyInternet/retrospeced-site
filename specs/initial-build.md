@@ -1,5 +1,5 @@
 ---
-status: plan
+status: building
 id: initial-build
 target-branch: main
 references:
@@ -542,44 +542,66 @@ Package manager: Bun (matches TUI project conventions). Vercel auto-detects Next
 # Attachments
 
 # Implementation Plan
-
 ## Approach
 
-Fresh Next.js 16 app at worktree root. Port `design/reference/styles.css` → `app/globals.css` verbatim (tokens + keyframes + section styles) then add two new tokens (`--completed`, `--border-active`) + two utility classes (`.mag`, `.cyn` already in styles.css — verify). TUI-accurate data contracts (kanban, draft, phases, rules, shortcuts) live in plain `.ts` files beside their components; presentation in `.tsx` + CSS Modules.
+Fresh Next.js 16 app at worktree root. Port `design/reference/styles.css` → `app/globals.css` verbatim (tokens + keyframes + section styles) then add two new tokens (`--completed`, `--border-active`), a `.red` utility class (missing from styles.css), and a `prefers-reduced-motion` block (absent from styles.css). `.mag` / `.cyn` / `.dim` / `.br` / `.acc` / `.grn` / `.ylw` are already present in styles.css — no need to add (spec §Pipeline phases's "new" claim is incorrect, confirmed against `styles.css:853–859`). TUI-accurate data contracts (kanban, draft, phases, rules, shortcuts) live in plain `.ts` files beside their components; presentation in `.tsx` + CSS Modules.
 
 ### File-by-file map
-- `package.json` — deps: `next@^16 react@^19 react-dom@^19 lucide-react @vercel/analytics`; dev: `typescript @types/react @types/react-dom @types/node eslint eslint-config-next`.
+- `package.json` — deps: `next@^16 react@^19 react-dom@^19 lucide-react @vercel/analytics @vercel/speed-insights`; dev: `typescript @types/react @types/react-dom @types/node eslint eslint-config-next`. Icons imported from `lucide-react`: `ArrowRight, Check, Circle, Github, Sun, Moon, Copy, Zap`.
 - `tsconfig.json` — strict, `"moduleResolution": "bundler"`, paths `@/*` → `./*`.
 - `next.config.ts` — `{}` (Node runtime, default build).
 - `eslint.config.mjs` — flat config extending `next/core-web-vitals` + `next/typescript`.
-- `app/layout.tsx` — `<html data-theme="dark" data-accent="orange" data-scanlines="on">`; inline `<script>` with `THEME_INIT_SCRIPT` before `</head>`; load JetBrains Mono via `next/font/google` weights `[400,500,600,700]`, preload; `<Nav/>`, `<main id="main">{children}</main>`, `<Footer/>`, `<Tweaks/>`, `<Analytics/>`; export `metadata` (see SEO block).
+- `app/layout.tsx` — `<html data-theme="dark" data-accent="orange" data-scanlines="on">`; inline `<script>` with `THEME_INIT_SCRIPT` before `</head>`; load **JetBrains Mono** (primary, weights `[400,500,600,700]`, preload) and **IBM Plex Mono** (fallback, weights `[400,600,700]`, preload) via `next/font/google`, both exposed as CSS variables consumed by `--font-mono` in globals.css; skip link `<a href="#main" class="skip-link">Skip to content</a>` as first focusable; `<Nav/>`, `<main id="main">{children}</main>`, `<Footer/>`, `<Tweaks/>`, `<Analytics/>`, `<SpeedInsights/>`; export full `metadata` per spec §SEO (title, description, `metadataBase: new URL('https://retrospeced.dev')`, `openGraph` {type, title, description, images:['/og.png']}, `twitter: { card: 'summary_large_image' }`). `public/og.png` shipped as a 1200×630 placeholder (solid-bg + wordmark) — real hero shot is post-launch.
 - `app/page.tsx` — compose Hero, Pipeline, Features, Shortcuts, Constitution, Install in order.
-- `app/globals.css` — lift styles.css; add tokens + `@media (prefers-reduced-motion: reduce)` disabling `caret-blink`/`pulse`/`fadein`/`blink`/`grow`/`slideup`/scanline overlay/spinner animation.
+- `app/globals.css` — lift styles.css verbatim; modify + add:
+  - **Replace** the existing `--font-mono` assignment on `:root` (`styles.css:5`, currently a hard-coded `"JetBrains Mono", "IBM Plex Mono", …` family list) with a reference to the next/font-generated CSS variables, e.g. `--font-mono: var(--font-jetbrains-mono), var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;`. The 11 existing `font-family: var(--font-mono)` consumers then pick up the hashed, preloaded font families. Leaving the original literal in place silently bypasses next/font optimization.
+  - new tokens: `--completed: var(--text-dim)`, `--border-active: var(--accent)` on `:root` and `[data-theme="light"]`.
+  - new utility class `.red { color: var(--red) }` (missing from source).
+  - focus ring: `:where(a, button, [role="tab"], input, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }`.
+  - skip link style: visually hidden by default, surfaces at top-left on `:focus`.
+  - responsive breakpoints carried from source: `@1080` hides center nav links, `@980` stacks hero + pipeline, `@900` single-col feature grid + install stack, `@720` shortcut grid 2-col + secondary nav CTAs hide. Verify these rules present post-port; AC #12 tests 720 and 1080.
+  - `@media (prefers-reduced-motion: reduce)` block disabling: `caret-blink`, `pulse` (including `.hero-badge .pulse`), `fadein`, `blink`, `grow`, `slideup`, scanline overlay (`html::before { display: none }`), braille spinner animation. Timer-driven behavior (pipeline cycle, spinner frame advance) is also gated at the JS layer — see Reduced-motion handling below.
 - `lib/theme.ts` — `THEME_INIT_SCRIPT`, storage key constants, `setTheme/setAccent/setScanlines` helpers.
 - `lib/braille.ts` — `BRAILLE_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']`; `useBrailleSpinner(ms=80)` hook.
 - `lib/token-color.ts` — `tokenColor(n) → 'red'|'yellow'|'dim'` (see interfaces).
-- `components/primitives/*` — `TerminalWindow`, `Kbd`, `SectionHead`, `CopyButton`, `FooterShortcuts` (shared `[key] label … ` strip).
-- `components/nav.tsx` — server; sticky `<header>` with brand caret + links + theme toggle + GitHub link + `Install` CTA.
-- `components/theme-toggle.tsx` — client; reads `data-theme`, flips + persists.
-- `components/footer.tsx` — server; 4-col grid + ASCII wordmark + status pill.
-- `components/hero/hero.tsx` — client; variant state from `process.env.NEXT_PUBLIC_TWEAKS === '1'` ? all three : just kanban; reads `document.documentElement.dataset.heroVariant` at mount for Tweaks-driven switching.
-- `components/hero/kanban.ts` — `COLUMNS` (5-col, per spec data contract).
-- `components/hero/kanban.tsx` — renders columns + cards, matches TUI render rules (id/project/→branch/queue status line). Uses `useBrailleSpinner` for building cards.
-- `components/hero/draft.tsx` — dual-panel editor + chat; static; info bar + focused left panel.
-- `components/hero/pipeline-term.tsx` — renders `PHASES[2]` (execution) as a **static snapshot** (all events shown, no cycling).
-- `components/pipeline/phases.tsx` — typed events with JSX render helpers (see contracts) + `PHASES` array.
-- `components/pipeline/pipeline.tsx` — client; `active`+`shown` state; `setTimeout` reveal at 750ms, phase advance at 2500ms; hover jumps to step, pauses until mouseleave.
-- `components/features/features.tsx` — server; static 8-card grid; card 05 mock uses first 6 items from `RULES`.
-- `components/shortcuts/{shortcuts.tsx,data.ts}` — server; `SHORTCUTS` array of 21.
-- `components/constitution/{constitution.tsx,rules.ts}` — client; toggle map state; `<pre>` markdown regenerated each render with live `new Date().toISOString()`.
-- `components/install/install.tsx` — client; tabs `git|bin`; copy buttons per line.
-- `components/tweaks.tsx` — client; returns `null` unless `process.env.NEXT_PUBLIC_TWEAKS === '1'`; mutates `<html>` data-attrs + localStorage.
+- `components/primitives/*` — `TerminalWindow`, `Kbd`, `SectionHead`, `CopyButton`, `FooterShortcuts`. Adoption map (primitives are load-bearing, not skeleton):
+  - `TerminalWindow` wraps every terminal mock: kanban, draft, pipeline-term, pipeline section log panel.
+  - `SectionHead` renders the eyebrow + heading + sub block for Pipeline, Features, Shortcuts, Constitution, Install.
+  - `Kbd` renders every key token: Shortcuts section grid cells, kanban top-bar + footer-bar keys (via `FooterShortcuts`), install tab short-hint keys, hero CTA kbd hints.
+  - `FooterShortcuts` renders the `[{key}] {label}` strip at the bottom of every terminal mock. **Separator is exactly two spaces** (per spec §Footer shortcut bar), not `·`. Hover lifts key and label to `var(--text-bright)`.
+  - `CopyButton` used per line inside install command blocks.
+- `components/nav.tsx` — server `<header>` (sticky, blur); brand caret + center link list + `<ThemeToggle/>` + GitHub link (`aria-label="GitHub repo"`) + `Install` CTA. Center link anchors require corresponding `id` attributes on the section wrappers in `app/page.tsx`: `id="how-it-works"` (Pipeline), `id="features"`, `id="shortcuts"`, `id="constitution"`, `id="install"`. Nav link labels lifted verbatim from `design/reference/src/nav.jsx`; if missing, use those five slugs. Center links hide at `≤1080px`; secondary CTAs hide at `≤720px`. No hamburger menu on mobile — the nav collapses in place (matches design/reference).
+- `components/theme-toggle.tsx` — client; reads `data-theme`, flips + persists; `aria-label="Toggle theme"`, renders `Sun`/`Moon` icons from lucide.
+- `components/footer.tsx` — server `<footer>`; 4-col grid + ASCII wordmark + status pill.
+- `components/hero/hero.tsx` — client; variant state — default `kanban`. Variant switching + `MutationObserver` on `documentElement` is **only installed when `process.env.NEXT_PUBLIC_TWEAKS === '1'`** (env var is inlined at build so the entire observer branch is dead-stripped in prod). Under TWEAKS, hero reads `document.documentElement.dataset.heroVariant` on mount and subscribes for changes. Left column: headline + tag + CTA buttons (icons from lucide) + install strip + metadata row (copy lifted verbatim from `design/reference/src/hero.jsx`).
+  - **Hero badge pill**: append `· macOS` to pill (`v0.4 · open source · mit-ish · macOS`), keep pulsing accent dot.
+  - **Hero metadata row**: add `platform: macOS 13+` alongside existing meta items.
+- `components/hero/kanban.ts` — `COLUMNS` (5-col). Fixture follows spec §Data Contracts **with two overrides** (spec is internally inconsistent; plan resolves):
+  - **Column `accent` values use the column-accent alias tokens**, not base tokens: `var(--draft)`, `var(--plan)`, `var(--building)`, `var(--review)`, `var(--completed)` (not `--cyan`/`--yellow`/`--accent`/`--green`/`--text-dim`). Spec §Required CSS tokens defines these aliases *for* column accents; using them keeps token indirection consistent for `[data-theme]` overrides.
+  - **Fixture must exercise every non-trivial `QueueStatus`**. Starting fixture has `building` + `queued`; add one `retrying` ticket (2nd building-column entry) **and one `failed` ticket** (e.g. a building-column entry with `queue: { status: 'failed', phase: 'Execution' }`) so all four render paths ship.
+- `components/hero/kanban.tsx` — **client** (deviates from spec §Client/Server Split, which omits kanban — required because `useBrailleSpinner` for building cards needs timers + reduced-motion check). Renders columns + TUI-accurate cards via `Kbd` primitive for keys (line 1 id / line 2 project dim / line 3 `→ branch` dim / line 4 queue status line per spec). Card borders: default `var(--border)`, hover `var(--border-active)`, **selected `var(--accent)` applied to the first building-column card (`billing-v2`) to exercise the selected render**, failed `var(--red)` applied to the failed ticket added above. Completed column cards: `opacity: 0.7`. Column header: uppercase label + count, 1px bottom border in column accent. **Top bar**: left `[⌥/] Search` (dim), right `All Projects  [⌥n] + New` (accent on key, rendered via `Kbd`). **Footer bar** via `<FooterShortcuts/>`, entries: `[←→] Switch column`, `[↑↓] Navigate`, `[Enter] Open`, `[⌥n] New ticket`, `[⌥k] Commands` — rendered with two-space separators per primitive spec.
+- `components/hero/draft.tsx` — dual-panel editor + chat; static. **Info bar** (single line): `Ticket: rate-limit · Project: acme-app · ● Draft · → main · References: 2 · ~1,847 tokens` with styling per spec (`rate-limit` cyan bold, `acme-app` accent bold, `● ` cyan + `Draft` text, `→ main` dim, tokens colored via `tokenColor(1847) → 'dim'`). **Left panel** focused: border `var(--accent)`, opacity 1, header `FEATURE SPECIFICATION — EDIT` (dim) + right-aligned `saved ✓` (green), body = 14-line spec-mock lifted from `design/reference/src/hero.jsx`. **Right panel** unfocused: border `var(--border)`, opacity 0.85, header `PM AGENT CHAT` (dim); messages use **left-border** color only (not full border) — PM cyan, user accent, tool yellow — with message block headers (`🤖 PM` cyan bold / `👤 You` accent bold / `{toolName}` yellow bold) and fabricated content matching tone per spec example. Below chat: 5-row textarea, placeholder `Type a message...`, footer line `Enter to send · Shift+Enter for newline` (dim — the `·` here is literal text content inside the dim footer line, not a `FooterShortcuts` separator). **Footer bar** via `<FooterShortcuts/>` (two-space separators), entries: `[Tab] Switch panel`, `[⌥e] Open in editor`, `[⌥p] Start plan`, `[⌥k] Commands`.
+- `components/hero/pipeline-term.tsx` — renders `PHASES[2]` (execution) as a **static snapshot** (all events shown, no cycling). Log panel header per spec: left `Ticket: rate-limit · Project: acme-app · → main`, right pulsing orange pill with `⠋ Task 3 of 5`. Tail placeholder while streaming (in the dynamic pipeline section): braille spinner in accent on its own line (no `[...] streaming...` tag format).
+- `components/pipeline/phases.tsx` — typed events with JSX render helpers (see contracts) + `PHASES` array. Section copy (eyebrow/heading/sub) lifted verbatim from spec §Pipeline section copy.
+- `components/pipeline/pipeline.tsx` — client; `active`+`shown` state driven by **`setInterval` pair** (per spec §Interactions): outer `setInterval(2500)` advances phase when `shown === events.length`; inner `setInterval(750)` advances `shown` within a phase. Both intervals cleared on unmount and on hover-pause. Hover on a step pauses auto-advance, sets `active` to the hovered index, resets `shown = 1` for that phase; mouseleave resumes. Under `prefers-reduced-motion: reduce`, neither interval is created and the active phase renders with `shown = events.length` (all events visible, no cycling). Same log-panel header + tail placeholder as `pipeline-term`.
+- `components/features/features.tsx` — server; static 8-card grid; card 05 mock (constitution preview) uses first 6 items from `RULES`. All card copy (01–08) verbatim from `design/reference/src/features.jsx`.
+- `components/shortcuts/{shortcuts.tsx,data.ts}` — server; `SHORTCUTS` array of 21; eyebrow/heading/sub verbatim from spec §Shortcuts.
+- `components/constitution/{constitution.tsx,rules.ts}` — client; toggle map state seeded from `RULES[i].defaultOn`; `<pre>` markdown regenerated each render with live `new Date().toISOString()`; renders `// no rules active — chaos mode` (dim italic) when `activeCount === 0`. **Header strip**: left `.retro/constitution.md · toggles`, right `● {activeCount}/{rules.length} active` (dot in accent). Section eyebrow/heading/sub verbatim from spec §Constitution section copy.
+- `components/install/install.tsx` — client; tabs `git|bin` (`role="tablist"` / `role="tab"` / `role="tabpanel"`); copy buttons per line (`aria-label="Copy command"`). Prereqs, commands, and CTA copy verbatim from `design/reference/src/install.jsx`, **with `PREREQS[0]` prepended**: `macOS 13+ (Ventura or later)` + sub `Linux & Windows coming — star the repo to follow along.` Above "Star on GitHub" CTA: single dim line `Currently macOS-only. Cross-platform support is on the roadmap.`
+- `components/tweaks.tsx` — client; returns `null` unless `process.env.NEXT_PUBLIC_TWEAKS === '1'`; mutates `<html>` `data-theme` / `data-accent` / `data-scanlines` / `data-hero-variant` + localStorage.
 
 ### Reduced-motion handling
-Wrap all `useEffect` timers with `if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;`. Braille spinner returns static `⠋`. Pipeline shows full event list immediately (skip cycling).
+Wrap all `useEffect` timers with `if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;`. Braille spinner returns static `⠋`. Pipeline shows full event list immediately for the active phase and does not auto-advance; hero badge pulse is disabled via the CSS block above; scanline overlay hidden. `caret-blink`, `pulse`, `fadein`, `blink`, `grow`, `slideup` all disabled at the CSS layer.
+
+### Accessibility (spec §Accessibility)
+- Skip link `<a href="#main">Skip to content</a>` as first focusable in `<body>`; visually hidden until `:focus`.
+- `aria-label` on every icon-only button: theme toggle, copy buttons, GitHub links.
+- Focus-visible ring on all interactive elements: 2px `var(--accent)` outline, 2px offset (declared once in globals.css).
+- Semantic landmarks: `<header>` (nav), `<main id="main">`, `<footer>`. Install tabs use `role="tablist"/"tab"/"tabpanel"`.
+- Color contrast: verify body `--text` on `--bg` ≥ 7:1 and `--text-dim` on `--bg` ≥ 4.5:1 for both themes; flag in Summary if any token pair fails WCAG AA.
 
 ### Client/server split (exact)
-Client: `theme-toggle`, `hero`, `kanban` (spinner), `pipeline`, `constitution`, `install`, `copy-button`, `tweaks`. Everything else server.
+Client: `theme-toggle`, `hero`, **`kanban`** (spinner — deviates from spec §Client/Server Split which omits it; required because `useBrailleSpinner` uses timers + reduced-motion matchMedia), `pipeline`, `constitution`, `install`, `copy-button`, `tweaks`. Everything else server.
 
 ### Hero variant gating
 - Default (prod): `kanban` only.
@@ -592,7 +614,11 @@ Types that cross task boundaries are in **Shared Contracts** below. Local helper
 ```ts
 // lib/theme.ts
 export const STORAGE_KEYS = { theme: 'retro:theme', accent: 'retro:accent', scanlines: 'retro:scanlines', heroVariant: 'retro:hero-variant' } as const;
-export const THEME_INIT_SCRIPT: string; // see spec §Theme System
+// THEME_INIT_SCRIPT extends spec §Theme System: also reads STORAGE_KEYS.heroVariant
+// and writes `data-hero-variant` (only when value is 'kanban'|'draft'|'pipeline';
+// otherwise attribute is omitted). This keeps Tweaks-set variants sticky across reloads
+// and prevents a flash of kanban on pages rendered with variant=draft|pipeline.
+export const THEME_INIT_SCRIPT: string;
 
 // lib/token-color.ts
 export function tokenColor(n: number): 'red' | 'yellow' | 'dim';
@@ -616,8 +642,16 @@ export interface ShortcutEntry { key: string; label: string; }
 export interface FooterShortcutsProps { entries: ShortcutEntry[]; rightSlot?: React.ReactNode; }
 ```
 
-Pipeline render helpers in `components/pipeline/phases.tsx`:
+Pipeline render helpers in `components/pipeline/phases.tsx` (each returns a `React.ReactNode` wrapped in the appropriate inline color class per spec §Pipeline phases):
 ```tsx
+// phaseStart:   <b className="acc">═══ Phase: {label} ═══</b>   (accent + bold — spec says "in accent, bold")
+// taskStart:    <span className="br">▶ Task {i} of {total}: {text}</span>
+// taskDone:     <span className="grn">✓ Task {i}: {text}</span>
+// toolUse:      <><span className="mag">🔧 </span>{tool}: <span className="dim">{summary}</span></>
+// agentText:    <>{text}</>   (no color class → inherits base text color)
+// errorEvent:   <span className="red">✗ Error in {phase}: {msg}</span>
+// buildComplete:<><span className="grn">✓ Build complete! PR opened.</span> <span className="dim">Press Esc to return.</span></>
+
 export function phaseStart(label: string): React.ReactNode;
 export function taskStart(i: number, total: number, text: string): React.ReactNode;
 export function taskDone(i: number, text: string): React.ReactNode;
@@ -633,9 +667,20 @@ export function buildComplete(): React.ReactNode;
 ```ts
 export type ColumnId = 'draft' | 'plan' | 'building' | 'review' | 'completed';
 export type QueueStatus = 'queued' | 'building' | 'retrying' | 'failed';
-export interface Ticket { id: string; project: string; targetBranch: string; queue?: { status: QueueStatus; phase?: string; position?: number; retries?: number }; }
+export interface Ticket {
+  id: string;
+  project: string;
+  targetBranch: string;
+  queue?: { status: QueueStatus; phase?: string; position?: number; retries?: number };
+  selected?: boolean; // renders card with var(--accent) border — set on billing-v2
+}
 export interface Column { id: ColumnId; label: string; accent: string; tickets: Ticket[]; }
-export const COLUMNS: Column[]; // fixture in spec §Data Contracts — ship verbatim
+export const COLUMNS: Column[];
+// Fixture ships per spec §Data Contracts with the two overrides documented in the
+// file-by-file map: (a) `accent` uses column-alias tokens (var(--draft) / var(--plan) /
+// var(--building) / var(--review) / var(--completed)), (b) fixture exercises every
+// non-trivial QueueStatus — add one retrying + one failed to the building column,
+// and mark billing-v2 with selected:true.
 ```
 
 ### Pipeline data (`components/pipeline/phases.tsx`)
@@ -680,9 +725,11 @@ export const PREREQS: { title: string; code?: string; href?: string; sub?: strin
 
 ### CSS tokens / class contract
 Class names referenced by multiple components (defined once in `globals.css`):
-- Utilities: `.dim`, `.br`, `.acc`, `.cyn`, `.grn`, `.ylw`, `.mag`, `.red` (add `.red` if missing), `.path` (→ accent).
+- Utilities already in styles.css (confirmed via `styles.css:853–859`): `.dim`, `.br`, `.acc`, `.cyn`, `.grn`, `.ylw`, `.mag`. Existing scoped `.path` (inside `.log-line .msg .path`) is promoted to a global utility `.path { color: var(--accent); }`.
+- Utilities to add: `.red { color: var(--red); }` (missing from source).
 - Event-log tags replaced by inline color classes above; **no `.tag-phase/.tag-ok/.tag-run/.tag-info/.tag-err` needed** (lift from styles.css but unused — may keep dormant).
 - New tokens on `:root` + `[data-theme="light"]`: `--completed: var(--text-dim)`, `--border-active: var(--accent)`.
+- New `--font-mono` CSS variable wired to both JetBrains Mono (primary) + IBM Plex Mono (fallback) loaded via `next/font/google`.
 
 ### Global attributes on `<html>`
 ```
@@ -717,16 +764,294 @@ bun run build       # next build → exits 0, no warnings
 7. DevTools Rendering → emulate `prefers-reduced-motion: reduce` → pipeline renders all events instantly, caret not blinking, spinner static.
 8. Lighthouse desktop on `bun run build && bun run start`: Perf/A11y/BP/SEO ≥ 95.
 9. Chrome console: zero errors/warnings on cold load.
-10. Search page source for `macOS` → appears in title, meta description, hero pill, hero meta row, install prereq, install callout.
+10. Search page source for `macOS` → appears in title, meta description, hero pill (`· macOS`), hero meta row (`platform: macOS 13+`), install prereq (top of list), install callout strip (`Currently macOS-only…`). All four in-page spots + both metadata spots must match AC #13.
+11. Tab from page load → first focus lands on visible "Skip to content" link; activating it jumps focus to `<main>`. Every interactive element shows a 2px accent focus ring on keyboard focus.
+12. Axe / Chrome a11y pane → no violations; icon-only buttons (theme toggle, copy, GitHub) have accessible names.
 
 ### LLM eval
 N/A — no agent code in this feature.
-
-
-
 # Tasks
 
+- [ ] Scaffold Next.js 16 project with config files, globals.css, lib helpers, and layout shell
+  **Context:** Fresh Next.js 16 app at worktree root `/Users/alawrence/.retro/worktrees/initial-build/`. No code exists yet — only `design/reference/` (source CSS + JSX prototype) and `specs/`. Port `design/reference/styles.css` verbatim to `app/globals.css` with documented additions. Reference TUI repo (read-only): `/Users/alawrence/.retro/references/initial-build/retrospeced-tui`.
+  **Files to create:**
+  - `package.json` — deps: `next@^16 react@^19 react-dom@^19 lucide-react @vercel/analytics @vercel/speed-insights`; dev: `typescript @types/react @types/react-dom @types/node eslint eslint-config-next`. Scripts: `dev: "next dev --turbopack"`, `build: "next build"`, `start: "next start"`, `lint: "next lint"`, `typecheck: "tsc --noEmit"`.
+  - `tsconfig.json` — strict, `"moduleResolution": "bundler"`, paths `@/*` → `./*`, `jsx: "preserve"`, `target: "ES2022"`, includes `next-env.d.ts`, `**/*.ts`, `**/*.tsx`, `.next/types/**/*.ts`.
+  - `next.config.ts` — `const nextConfig = {}; export default nextConfig;`.
+  - `eslint.config.mjs` — flat config extending `next/core-web-vitals` + `next/typescript`.
+  - `.gitignore` — standard Next.js ignore (node_modules, .next, .env*.local, next-env.d.ts).
+  - `app/layout.tsx` — root layout; `<html lang="en" data-theme="dark" data-accent="orange" data-scanlines="on">`; load **JetBrains Mono** (`weights: ['400','500','600','700']`, `variable: '--font-jetbrains-mono'`, `subsets: ['latin']`, `display: 'swap'`, `preload: true`) and **IBM Plex Mono** (`weights: ['400','600','700']`, `variable: '--font-ibm-plex-mono'`, `subsets: ['latin']`, `display: 'swap'`, `preload: true`) via `next/font/google`; attach both `.variable` class names to `<html>`; inline `<script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />` in `<head>` BEFORE any styles; `<body>` contains (in order): skip link `<a href="#main" className="skip-link">Skip to content</a>`, placeholder for `<Nav/>` (stub div), `<main id="main">{children}</main>`, placeholder for `<Footer/>`, placeholder for `<Tweaks/>`, `<Analytics/>` from `@vercel/analytics/react`, `<SpeedInsights/>` from `@vercel/speed-insights/next`. Export `metadata: Metadata` per spec §SEO (title `retro(speced) — spec-driven AI development TUI for macOS`, description `Open-source terminal UI for spec-driven AI development on macOS. Plan, build, review, ship — all in one loop.`, `metadataBase: new URL('https://retrospeced.dev')`, `openGraph: { type: 'website', title, description, images: ['/og.png'] }`, `twitter: { card: 'summary_large_image' }`).
+  - `app/page.tsx` — placeholder exporting `export default function Page() { return <div>retro(speced)</div>; }`. Will be replaced by final composition task.
+  - `app/globals.css` — port `design/reference/styles.css` verbatim, then modify/add:
+    1. Replace the `--font-mono` line on `:root` with `--font-mono: var(--font-jetbrains-mono), var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, Menlo, monospace;`.
+    2. Add to `:root` and `[data-theme="light"]` blocks: `--completed: var(--text-dim); --border-active: var(--accent);`.
+    3. Add utility class `.red { color: var(--red); }` (other utilities `.dim .br .acc .cyn .grn .ylw .mag` already exist; verify after port).
+    4. Promote `.path` to global utility: `.path { color: var(--accent); }`.
+    5. Add skip-link style (visually hidden; appears on `:focus`):
+       ```css
+       .skip-link { position: absolute; left: -9999px; top: 0; padding: 8px 12px; background: var(--bg-panel); color: var(--text-bright); border: 1px solid var(--accent); z-index: 1000; }
+       .skip-link:focus { left: 8px; top: 8px; }
+       ```
+    6. Add focus ring once: `:where(a, button, [role="tab"], input, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }`.
+    7. Append `@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0ms !important; } html::before { display: none !important; } }` — disables `caret-blink`, `pulse`, `fadein`, `blink`, `grow`, `slideup`, scanline overlay.
+  - `public/og.png` — 1200×630 placeholder; if not producible in-task, create `public/.gitkeep` and note in Retro that OG image is deferred.
+  - `lib/theme.ts` — export `STORAGE_KEYS = { theme: 'retro:theme', accent: 'retro:accent', scanlines: 'retro:scanlines', heroVariant: 'retro:hero-variant' } as const;`. Export `THEME_INIT_SCRIPT: string` that, at runtime, reads all 4 localStorage keys and sets `data-theme`, `data-accent`, `data-scanlines` on `document.documentElement` (defaults `dark`/`orange`/`on`), and sets `data-hero-variant` only if value ∈ `{kanban,draft,pipeline}`. Wrap in try/catch IIFE. Export helper setters `setTheme(v)`, `setAccent(v)`, `setScanlines(v)` that persist to localStorage + set attribute.
+  - `lib/braille.ts` — export `BRAILLE_FRAMES = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'] as const;`. Export `useBrailleSpinner(intervalMs = 80): string` — React hook; returns current frame. Inside effect: early-return if `window.matchMedia('(prefers-reduced-motion: reduce)').matches`, leaving frame at index 0. Otherwise `setInterval` cycles index; cleanup on unmount. File must start with `'use client';`.
+  - `lib/token-color.ts` — export `tokenColor(n: number): 'red' | 'yellow' | 'dim'` → `n > 20000 ? 'red' : n >= 15000 ? 'yellow' : 'dim'`.
+  **Acceptance criteria:**
+  - `bun install` exits 0.
+  - `bun run typecheck` exits 0 (no TS errors).
+  - `bun run lint` exits 0.
+  - `bun run build` exits 0.
+  - `<html>` renders with `data-theme="dark"`, `data-accent="orange"`, `data-scanlines="on"`, and font CSS variables applied.
+  - No FOUC: the inline `THEME_INIT_SCRIPT` appears inside `<head>` before any styles in built HTML.
+  - `prefers-reduced-motion: reduce` media query appears in `globals.css`.
+  **Constraints:** No Tailwind. No CSS-in-JS. Icons come from `lucide-react` (not added to any file in this task — reserved for component tasks). Do not remove or reorder any existing rule in `styles.css` during the port; only modify the `--font-mono` line and append new blocks at the bottom.
+  **Scope:** Create only the files above. Do not create any `components/` files in this task.
 
+- [ ] Build shared primitives (terminal-window, kbd, section-head, copy-button, footer-shortcuts)
+  **Context:** Presentation primitives used by every section. Location: `components/primitives/`. CSS Module file `primitives.module.css` holds all primitive styles. Token classes `.dim .br .acc` etc. are global (in `app/globals.css`).
+  **Files to create:**
+  - `components/primitives/terminal-window.tsx` — server component. Props: `{ title?: string; subtitle?: string; rightSlot?: React.ReactNode; children: React.ReactNode; className?: string; }`. Renders a rounded panel with 1px `var(--border)`, background `var(--bg-panel)`, padding, header row (title in `var(--text-bright)`, subtitle in `var(--text-dim)`, `rightSlot` right-aligned) above children. No title → omit header row.
+  - `components/primitives/kbd.tsx` — server component. Props: `{ children: React.ReactNode; accent?: boolean; className?: string; }`. Renders `<kbd>[{children}]</kbd>` styled monospace; when `accent` → color `var(--accent)`; default → color `var(--text-dim)`.
+  - `components/primitives/section-head.tsx` — server component. Props: `{ eyebrow: string; title: string; sub?: string; right?: React.ReactNode; }`. Renders eyebrow as small uppercase dim text, title as `<h2>` in `var(--text-bright)`, sub as `<p>` in `var(--text-dim)`. `right` placed top-right of the heading block.
+  - `components/primitives/copy-button.tsx` — **client** component (`'use client';` at top). Props: `{ text: string; label?: string; copiedLabel?: string; className?: string; }`. Button with `aria-label="Copy command"` when no label; clicking calls `navigator.clipboard.writeText(text)` and swaps label to `copiedLabel ?? 'copied'` for exactly 1400ms, then reverts. Default `label = 'copy'`. Uses `Copy` icon from `lucide-react` when no text label.
+  - `components/primitives/footer-shortcuts.tsx` — server component. Types (export):
+    ```ts
+    export interface ShortcutEntry { key: string; label: string; }
+    export interface FooterShortcutsProps { entries: ShortcutEntry[]; rightSlot?: React.ReactNode; }
+    ```
+    Renders a horizontal strip where each entry renders as `<Kbd accent>{key}</Kbd>` + single space + `<span className="dim">{label}</span>`. **Separator between entries is exactly two spaces** (render as two non-breaking spaces `  ` or a styled spacer with width). On hover of a single entry, lifts both the key and label to `var(--text-bright)` via class toggle.
+  - `components/primitives/primitives.module.css` — all CSS Module classes for the above components. Use `composes` from global utilities only if needed — primitives otherwise style locally.
+  **Acceptance criteria:**
+  - `bun run typecheck` exits 0.
+  - `bun run lint` exits 0.
+  - `bun run build` exits 0.
+  - `CopyButton` file begins with `'use client';`; other four do not.
+  - `FooterShortcuts` renders N entries with two-space separators (no `·` between entries — the `·` only appears as literal content inside individual labels).
+  - `Kbd` wraps content in literal `[` `]` brackets.
+  **Scope:** Only `components/primitives/*`. Do not modify `app/`, `lib/`, or any other component directory.
+
+- [ ] Build Nav, ThemeToggle, and Footer components
+  **Context:** Sticky top nav + page footer. Reference copy: `design/reference/src/nav.jsx` and `design/reference/src/footer.jsx`. Icons from `lucide-react`: `Github`, `Sun`, `Moon`, `ArrowRight`. Theme toggle flips `data-theme` on `<html>` between `dark`/`light` and persists to `localStorage` via helpers from `lib/theme.ts`.
+  **Files to create:**
+  - `components/nav.tsx` — server component; `<header>` that is sticky top with backdrop blur (styles in `nav.module.css` or inline via CSS Modules). Left: brand caret + wordmark. Center: anchor links to `#how-it-works`, `#features`, `#shortcuts`, `#constitution`, `#install` (labels lifted from `design/reference/src/nav.jsx`; if missing, use slugs `How it works`, `Features`, `Shortcuts`, `Constitution`, `Install`). Right: `<ThemeToggle/>`, GitHub link `<a href="https://github.com/" aria-label="GitHub repo" target="_blank" rel="noreferrer">` with `<Github/>` icon, `Install` CTA button → `href="#install"` with `<ArrowRight/>` icon. Responsive: center links hidden at `≤1080px`; secondary CTAs (GitHub link) hidden at `≤720px` via media queries in the module CSS.
+  - `components/nav.module.css` — styles including the two breakpoint rules above.
+  - `components/theme-toggle.tsx` — **client** component (`'use client';`). Reads current `data-theme` attribute from `document.documentElement` on mount; button with `aria-label="Toggle theme"` that flips dark↔light, persists via `setTheme` from `lib/theme.ts`, and updates the attribute. Renders `<Sun/>` when current is `dark` (clicking switches to light), `<Moon/>` when current is `light`. SSR-safe: during initial render (before mount) render a stable icon to avoid hydration mismatch (e.g. `<Moon/>`).
+  - `components/footer.tsx` — server component; `<footer>` with 4-column grid at desktop (stacks at mobile). ASCII wordmark block (lift the multi-line ASCII from `design/reference/src/footer.jsx`). Status pill (e.g. pulsing green dot + `operational`). Four columns of link groups (copy lifted from `design/reference/src/footer.jsx`; if that file lacks groups, render: Product, Community, Legal, Links with sensible items). All external links: `target="_blank" rel="noreferrer"`.
+  - `components/footer.module.css` — 4-col grid + responsive stack.
+  **Dependencies:** Reads `setTheme`, `STORAGE_KEYS` from `lib/theme.ts` (created in scaffold task).
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - `ThemeToggle` file starts with `'use client';`. `Nav` and `Footer` do not.
+  - Clicking theme toggle flips `document.documentElement.dataset.theme` between `dark` and `light`, writes `retro:theme` to localStorage, and reload restores the chosen value (via `THEME_INIT_SCRIPT` from scaffold task — already wired).
+  - At viewport 1080px, center nav links are hidden via CSS; at 720px, GitHub CTA hidden.
+  - No console warnings/errors.
+  **Scope:** Only `components/nav.tsx`, `components/nav.module.css`, `components/theme-toggle.tsx`, `components/footer.tsx`, `components/footer.module.css`. Do not modify `app/layout.tsx` to wire these in yet — that happens in the final compose task (but layout currently references `<Nav/>` / `<Footer/>` placeholders; you may replace the placeholders with real imports so layout builds).
+
+- [ ] Build Hero section (data + kanban + draft + pipeline-term + hero shell)
+  **Context:** Hero is a two-column layout (stacks at ≤980px): left column is copy (headline, tag, CTAs, install strip, metadata row) lifted verbatim from `design/reference/src/hero.jsx`; right column is a terminal mock whose variant (`kanban`|`draft`|`pipeline`) is Tweaks-panel-gated — default and shipping variant is `kanban`. Variant switching only installed if `process.env.NEXT_PUBLIC_TWEAKS === '1'`.
+  Reference TUI (read-only, use for screen fidelity): `/Users/alawrence/.retro/references/initial-build/retrospeced-tui/src/screens/tickets.tsx`, `components/kanban-card.tsx`, `screens/draft-view.tsx`, `components/footer-shortcuts.tsx`. Reference prototype (copy-lift source, NOT for terminal mocks): `design/reference/src/hero.jsx`.
+  **Files to create:**
+  - `components/hero/kanban.ts` — exports per Shared Contracts (spec §Shared Contracts › Kanban data):
+    ```ts
+    export type ColumnId = 'draft' | 'plan' | 'building' | 'review' | 'completed';
+    export type QueueStatus = 'queued' | 'building' | 'retrying' | 'failed';
+    export interface Ticket { id: string; project: string; targetBranch: string; queue?: { status: QueueStatus; phase?: string; position?: number; retries?: number }; selected?: boolean; }
+    export interface Column { id: ColumnId; label: string; accent: string; tickets: Ticket[]; }
+    export const COLUMNS: Column[];
+    ```
+    Fixture ships per spec §Data Contracts with two overrides:
+    1. **Column `accent` values use alias tokens**: `var(--draft)`, `var(--plan)`, `var(--building)`, `var(--review)`, `var(--completed)` — NOT `--cyan`/`--yellow`/`--accent`/`--green`/`--text-dim`.
+    2. **Fixture exercises every `QueueStatus`**. Building column: `billing-v2` with `{status:'building', phase:'Task 3 of 5'}` AND `selected: true`; `stripe-webhook` with `{status:'retrying', retries:2, phase:'Execution'}`; add a new failed ticket e.g. `payments-refactor` with `{status:'failed', phase:'Execution'}`; `webhook-retry` with `{status:'queued', position:1}`. Other columns per spec §Data Contracts.
+  - `components/hero/kanban.tsx` — **client** component (`'use client';`) because it uses `useBrailleSpinner` from `lib/braille.ts` for building-status cards. Props: `{}`. Renders:
+    - Top bar: left `<Kbd>⌥/</Kbd> Search` dim, right `All Projects  <Kbd accent>⌥n</Kbd> + New` (with accent on key; 2-space separator).
+    - Column grid (5 columns). Each column header: uppercase `{label}` + count (e.g. `DRAFT  3`), 1px bottom border in column `accent`.
+    - Card render per ticket (1:1 with spec §Data Contracts):
+      - Line 1: `{id}` in `var(--text)`.
+      - Line 2: `{project}` dim.
+      - Line 3: `→ {targetBranch}` dim.
+      - Line 4 (only if `queue`): per status variant — `building`: `{spinnerFrame} {phase}` colored `var(--accent)`; `queued`: `⏳ Queued (#{position})` dim; `retrying`: `↻ Retrying ({retries}/3)` yellow; `failed`: `✗ Failed: {phase}` red.
+    - Card border: default `var(--border)`; `selected` → `var(--accent)`; `queue.status === 'failed'` → `var(--red)`; `:hover` → `var(--border-active)`. Completed column cards: `opacity: 0.7` wrapper class.
+    - Footer bar via `<FooterShortcuts entries={[...]}>` with entries: `{key:'←→', label:'Switch column'}, {key:'↑↓', label:'Navigate'}, {key:'Enter', label:'Open'}, {key:'⌥n', label:'New ticket'}, {key:'⌥k', label:'Commands'}`.
+    - Wrap everything in `<TerminalWindow>`.
+  - `components/hero/draft.tsx` — server component (static). Uses `tokenColor` from `lib/token-color.ts`. Renders:
+    - Info bar one-line: `Ticket: ` + `<b className="cyn">rate-limit</b>` + ` · Project: ` + `<b className="acc">acme-app</b>` + ` · ` + `<span className="cyn">● </span>Draft · ` + `<span className="dim">→ main</span>` + ` · References: 2 · ` + `<span className={tokenColor(1847)}>~1,847 tokens</span>`.
+    - Two-column split 50/50. Left panel (focused): border `var(--accent)`, opacity 1, header row `FEATURE SPECIFICATION — EDIT` dim + `<span className="grn">saved ✓</span>` right. Body: 14-line spec-mock lifted from `design/reference/src/hero.jsx` (look for `spec-mock` or equivalent).
+    - Right panel (unfocused): border `var(--border)`, opacity 0.85, header `PM AGENT CHAT` dim. Message blocks with **left-border only** (`border-left: 3px solid <color>`, no other borders): PM cyan, user accent, tool yellow. Headers bold in matching color. Content per spec §Draft view mock example (fabricate matching tone).
+    - Below chat: 5-row `<textarea>` with border `var(--border)`, `placeholder="Type a message..."`, disabled or readOnly (it's a static mock). Footer line under textarea: `Enter to send · Shift+Enter for newline` dim.
+    - Footer bar via `<FooterShortcuts entries={[{key:'Tab',label:'Switch panel'},{key:'⌥e',label:'Open in editor'},{key:'⌥p',label:'Start plan'},{key:'⌥k',label:'Commands'}]}/>`.
+    - Wrap in `<TerminalWindow>`.
+  - `components/hero/pipeline-term.tsx` — server component. Renders a **static snapshot** of `PHASES[2]` (execution) from `components/pipeline/phases.tsx`: all events shown, no cycling. Log panel header: left `Ticket: rate-limit · Project: acme-app · → main`, right pulsing pill with `⠋ Task 3 of 5`. No trailing spinner placeholder (snapshot is complete). Wrap in `<TerminalWindow>`.
+  - `components/hero/hero.tsx` — **client** component (`'use client';`). Left column: copy lifted verbatim from `design/reference/src/hero.jsx` (headline, tag, CTA labels, install strip, metadata row). Apply macOS-only overrides:
+    - Badge pill text includes `· macOS` (e.g. `v0.4 · open source · mit-ish · macOS`) with pulsing accent dot preserved.
+    - Metadata row adds item `platform: macOS 13+`.
+    Right column: renders `<Kanban/>` by default. Variant switching gated on build-time env: if `process.env.NEXT_PUBLIC_TWEAKS === '1'`, add `useEffect` that reads `document.documentElement.dataset.heroVariant` and subscribes via `MutationObserver` for attribute changes, storing variant in state — `'draft'` → `<Draft/>`; `'pipeline'` → `<PipelineTerm/>`; else `<Kanban/>`. When env var is NOT `'1'`, the MutationObserver branch and extra imports must be dead code (use `if (process.env.NEXT_PUBLIC_TWEAKS === '1')` guard so bundler strips it).
+  - `components/hero/hero.module.css` — two-column layout at ≥980px; stack at ≤980px; message-block left-border styles for draft panel; spec-mock block styling; info-bar layout.
+  **Dependencies:** Reads `TerminalWindow`, `Kbd`, `FooterShortcuts` from `components/primitives/`; `useBrailleSpinner` from `lib/braille.ts`; `tokenColor` from `lib/token-color.ts`; `PHASES` from `components/pipeline/phases.tsx` (that file is created in the pipeline section task — for this task, either stub the import or implement `phases.tsx` here with the minimum needed, then the pipeline task builds on top). **Recommended:** create `components/pipeline/phases.tsx` with full `PHASES` array in THIS task (it's data with no UI dependency and lets `pipeline-term` import it), then the pipeline task only adds `pipeline.tsx`. Include `PIPELINE_REVEAL_MS = 750` and `PIPELINE_ADVANCE_MS = 2500` exports in `phases.tsx`.
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - `components/hero/kanban.tsx` and `components/hero/hero.tsx` start with `'use client';`; `draft.tsx`, `pipeline-term.tsx`, `kanban.ts`, `phases.tsx` do not.
+  - `COLUMNS[2].tickets` (building column) contains exactly one ticket for each of `building`, `retrying`, `failed`, `queued` statuses.
+  - `billing-v2` ticket has `selected: true`.
+  - All five `Column.accent` values use `var(--draft|plan|building|review|completed)` alias tokens.
+  - Hero pill text contains `macOS`; hero metadata row contains `platform: macOS 13+`.
+  **Constraints:** Do NOT lift `HeroKanban`, `HeroSpec`, `HeroPipeline`, `TICKETS`, `PIPE_LINES` from `design/reference/src/hero.jsx` — those predate the TUI. Use this task's own data contracts instead.
+  **Scope:** Create files under `components/hero/` and `components/pipeline/phases.tsx` (data-only). Do not modify `components/pipeline/pipeline.tsx` — that's the next task.
+
+- [ ] Build Pipeline section with auto-cycling phase reveal
+  **Context:** The "How it works" section (spec §Sections #3). Shows 6 phases with events that reveal one-at-a-time (750ms apart); on final event, advances to next phase after 2500ms. Hover on a phase step pauses cycling and jumps to that phase. `PHASES` array + render helpers + timing constants are already in `components/pipeline/phases.tsx` (created in the hero task). This task only adds the interactive component.
+  **Files to create:**
+  - `components/pipeline/pipeline.tsx` — **client** component (`'use client';`). State: `active: number` (current phase index, 0..5) + `shown: number` (events revealed so far in active phase, 1..events.length). Effects:
+    - Outer `setInterval(PIPELINE_ADVANCE_MS = 2500)` advances `active = (active + 1) % PHASES.length` and resets `shown = 1` — but only when `shown === PHASES[active].events.length`. Use a single combined effect with refs to avoid stale closures.
+    - Inner `setInterval(PIPELINE_REVEAL_MS = 750)` advances `shown = min(shown + 1, events.length)`.
+    - Both guarded: if `window.matchMedia('(prefers-reduced-motion: reduce)').matches`, skip setting intervals and render `shown = PHASES[active].events.length` immediately.
+    - Cleanup all intervals on unmount.
+    - Hover: `onMouseEnter(index)` pauses auto-advance (clear intervals), sets `active = index`, `shown = 1`; restart the inner reveal interval so events still stream within the hovered phase; on `onMouseLeave` of the step strip container, resume auto-advance.
+    Render:
+    - `<SectionHead eyebrow="how it works" title="A six-phase build loop you can watch in real time." sub="Retro orchestrates Claude Code through a deterministic pipeline — planning, task generation, execution, review, retro rollup, PR. Every phase streams typed events, so you see every tool call, every file touched, every retry. If a build fails, it resumes from the last good phase instead of starting from zero."/>`.
+    - Phase step strip: one clickable/hoverable pill per phase; active pill highlighted with `var(--accent)`.
+    - Log panel (wrapped in `<TerminalWindow>`) showing `PHASES[active].events.slice(0, shown)` — render each event's `node` on its own line (`<div>`). Header: left `Ticket: rate-limit · Project: acme-app · → main`, right a pulsing pill with `{brailleFrame} Task {active+1} of {PHASES.length}` (braille frame from `useBrailleSpinner`). Trailing placeholder: when `shown < events.length`, append a final line with just `{brailleFrame}` in `var(--accent)` on its own.
+  - `components/pipeline/pipeline.module.css` — phase step strip styling; log line typography; active/hover states.
+  **Dependencies:** Imports `PHASES, PIPELINE_REVEAL_MS, PIPELINE_ADVANCE_MS` from `components/pipeline/phases.tsx` (produced by Hero task). Imports `TerminalWindow`, `SectionHead` from primitives. Imports `useBrailleSpinner` from `lib/braille.ts`.
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - `pipeline.tsx` starts with `'use client';`.
+  - Running `bun run dev` and opening the section: events reveal one per 750ms; after last event, phase advances within ~2.5s. Hovering a step: pill becomes active in next animation frame.
+  - Under DevTools Rendering → emulate `prefers-reduced-motion: reduce`: all events of the active phase render immediately; no cycling; no spinner frame advance.
+  - No stray intervals (verify by unmounting via navigation — no console warnings about state updates on unmounted component).
+  **Scope:** Only `components/pipeline/pipeline.tsx` and `components/pipeline/pipeline.module.css`. Do not modify `components/pipeline/phases.tsx` (already created by Hero task).
+
+- [ ] Build Features section (8-card 12-col grid)
+  **Context:** Static section, 8 cards in a 12-col grid with mixed spans (6/12/4). Card labels 01–08, headings, and paragraph bodies lifted **verbatim** from `design/reference/src/features.jsx`. Inner mocks (spec editor preview, deep-maps lens picker, worktree tree, constitution rule list) kept 1:1 from the prototype — EXCEPT: card 05 (constitution preview) must render first 6 labels from `RULES` in `components/constitution/rules.ts`.
+  **Files to create:**
+  - `components/features/features.tsx` — server component. Static JSX. Eight `<article>` elements (or `<div role="group">`), each with a label `01`–`08`, heading, body text, and optional inner mock. Copy lifted **verbatim** from `design/reference/src/features.jsx`.
+  - `components/features/features.module.css` — CSS grid `grid-template-columns: repeat(12, 1fr); gap: <from styles.css>;` with spans applied via `grid-column: span 6 | 12 | 4`. At `≤900px` collapse to single column.
+  - Card 05 mock: import `RULES` from `components/constitution/rules.ts` and render first 6 rules as a list of labels (no toggle interactivity — it's a stylized preview). If `components/constitution/rules.ts` is not yet created, create a minimal stub exporting `RULES: Rule[]` in this task (the Constitution task will replace with full data); OR coordinate by creating the full `rules.ts` here (acceptable — constitution task may then only build UI). **Prefer:** create the full `rules.ts` file in this task so constitution task can focus on UI.
+  **Dependencies:** Optionally creates `components/constitution/rules.ts` (full 11-rule data + `buildConstitutionMarkdown` function per Shared Contracts).
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - Grid renders 8 cards at desktop viewport (use DevTools).
+  - At `≤900px`, grid is single-column (verify via responsive mode).
+  - Card 05 displays first 6 rule labels from `RULES`.
+  **Scope:** Create `components/features/*` and optionally `components/constitution/rules.ts`. Do not create `components/constitution/constitution.tsx` — that's the Constitution task.
+
+- [ ] Build Shortcuts section (21 entries, 3-col desktop, 2-col mobile)
+  **Context:** Static section. Data: 21 entries per spec §Shortcuts data contract. Grid layout: 3 columns at desktop, 2 columns at `≤720px`. Each entry cell: `<Kbd>{keys}</Kbd>` on the left, description in `var(--text)`, context tag in `var(--text-dim)` on the right.
+  **Files to create:**
+  - `components/shortcuts/data.ts` — exports `Shortcut` interface and `SHORTCUTS: Shortcut[]` with all 21 entries **verbatim** from spec §Shortcuts:
+    ```ts
+    export interface Shortcut { keys: string; desc: string; context: string; }
+    export const SHORTCUTS: Shortcut[] = [/* 21 entries verbatim */];
+    ```
+  - `components/shortcuts/shortcuts.tsx` — server component. Renders `<SectionHead eyebrow="shortcuts" title="Hands stay on home row." sub="Every screen is one key away, and no action ever requires a mouse. The whole app is a keyboard API first, a UI second."/>`, then a grid of 21 cells. Each cell: `<Kbd>{keys}</Kbd>` + `{desc}` + `<span className="dim">{context}</span>`.
+  - `components/shortcuts/shortcuts.module.css` — `grid-template-columns: repeat(3, 1fr)` at desktop; `repeat(2, 1fr)` at `≤720px`.
+  **Dependencies:** `SectionHead`, `Kbd` from primitives.
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - `SHORTCUTS.length === 21`.
+  - Grid is 3-column at 1200px viewport, 2-column at 720px viewport.
+  **Scope:** Only `components/shortcuts/*`.
+
+- [ ] Build Constitution section (11 toggleable rules + live markdown preview)
+  **Context:** Interactive section. 11 rules per spec §Constitution rules data contract — `id`, `label`, `description` verbatim from TUI (`/Users/alawrence/.retro/references/initial-build/retrospeced-tui/src/lib/constitution/toggles.ts`); `defaultOn` is a marketing choice (tdd, smallest-changeset, type-safety, reuse-existing-patterns, incremental-testing, lint-compliance, no-new-deps → true; defensive-programming, documentation, cleanup-tech-debt, caveman-mode → false). If `components/constitution/rules.ts` already exists (from Features task), do not recreate — only add UI.
+  **Files to create:**
+  - `components/constitution/rules.ts` — if not already present. Exports `Rule` interface and `RULES: Rule[]` (11 entries verbatim from spec §Constitution rules). Also exports `buildConstitutionMarkdown(rules: { rule: Rule; on: boolean }[], nowIso: string): string` per Shared Contracts: header `# The Constitution\n# Regenerated {nowIso}\n\nYou are a build agent. Follow these rules strictly.\n\n`; per active rule `## {label}\n{description}\n\n`; when zero active → body is `// no rules active — chaos mode`.
+  - `components/constitution/constitution.tsx` — **client** component (`'use client';`). State: `on: Record<string, boolean>` initialized from `RULES[i].defaultOn`. Layout: left column with 11 clickable toggles (each: checkbox-like indicator + label + description); right column with `<pre>` showing `buildConstitutionMarkdown(...)` output. **ISO timestamp regenerated on each render** (`new Date().toISOString()` called inline in the render function — not stored in state). When `activeCount === 0`, render `// no rules active — chaos mode` in the rules section of the markdown, styled dim italic (via a class on the `<pre>`'s content). Header strip above the two-column layout: left `.retro/constitution.md · toggles`, right `● {activeCount}/{rules.length} active` with dot in `var(--accent)`.
+    Section head above everything: `<SectionHead eyebrow="constitution" title="Your taste, as a system prompt." sub="Toggle the engineering principles every build agent has to follow. Retro regenerates .retro/constitution.md on each change — click the rules, try it."/>`.
+  - `components/constitution/constitution.module.css` — two-col layout, toggle styling, `<pre>` styling.
+  **Dependencies:** `SectionHead` from primitives. `RULES`, `buildConstitutionMarkdown` from `rules.ts`.
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - `constitution.tsx` starts with `'use client';`; `rules.ts` does not.
+  - `RULES.length === 11`. Rule ids match spec verbatim.
+  - Clicking any toggle updates the `<pre>` content within the same render tick.
+  - `# Regenerated {iso}` line shows a fresh ISO timestamp on every render (test: toggle twice quickly — timestamps should differ).
+  - Toggling all rules off shows `// no rules active — chaos mode` in dim italic.
+  **Scope:** `components/constitution/*`. If `rules.ts` already exists from Features task, verify it matches spec and extend with `buildConstitutionMarkdown` if missing.
+
+- [ ] Build Install section (tabs + prereqs + copy buttons)
+  **Context:** Tabbed commands ("from source" / "standalone binary") with copy buttons per line. Prereqs list (macOS prepended). Callout strip above GitHub CTA. Copy lifted **verbatim** from `design/reference/src/install.jsx` for commands, prereqs (except the prepended macOS item), and CTA copy.
+  **Files to create:**
+  - `components/install/install.tsx` — **client** component (`'use client';`). Exports (co-located):
+    ```ts
+    export type InstallTab = 'git' | 'bin';
+    export interface CmdLine { kind: 'comment' | 'cmd'; text: string; }
+    export const TAB_LABELS: Record<InstallTab, string> = { git: 'from source', bin: 'standalone binary' };
+    export const INSTALL_COMMANDS: Record<InstallTab, CmdLine[]> = { /* lifted from design/reference/src/install.jsx */ };
+    export const PREREQS: { title: string; code?: string; href?: string; sub?: string }[] = [
+      { title: 'macOS 13+ (Ventura or later)', sub: 'Linux & Windows coming — star the repo to follow along.' },
+      // ... remaining prereqs lifted from design/reference/src/install.jsx, verbatim
+    ];
+    ```
+    Tabs use accessible pattern: container `role="tablist"`, buttons `role="tab"` with `aria-selected={active===id}` and `aria-controls={panelId}`, panels `role="tabpanel"` with `id={panelId}` and `aria-labelledby={tabId}`. State: `active: InstallTab` (default `'git'`). Active-tab panel renders `INSTALL_COMMANDS[active]` as a list of lines — comments in `var(--text-dim)` with `#` prefix; commands in `var(--text)`. Each command line has `<CopyButton text={line.text}/>` on the right.
+    Layout: left column = prereqs (rendered from `PREREQS`), right column = tabs + panel. Below the install panel: dim line `Currently macOS-only. Cross-platform support is on the roadmap.` above a `Star on GitHub` CTA button.
+    Section head: `<SectionHead eyebrow="quickstart" title="Install in under a minute." sub="..."/>` — lift eyebrow/title/sub from `design/reference/src/install.jsx` if present; otherwise use the values shown here.
+  - `components/install/install.module.css` — two-col layout, stacks at `≤900px`; tab button active/inactive states; command-line typography.
+  **Dependencies:** `SectionHead`, `CopyButton` from primitives. `Github` icon from `lucide-react` for the CTA.
+  **Acceptance criteria:**
+  - `bun run typecheck` / `lint` / `build` all exit 0.
+  - `install.tsx` starts with `'use client';`.
+  - `PREREQS[0].title === 'macOS 13+ (Ventura or later)'` and its `sub` includes `Linux & Windows coming`.
+  - Clicking `from source` / `standalone binary` tab buttons swaps the visible panel. `aria-selected` is correctly set on exactly one tab at a time.
+  - Clicking a copy button writes to clipboard and the button shows `copied` for ~1400ms (via `CopyButton` primitive).
+  - Dim line `Currently macOS-only. Cross-platform support is on the roadmap.` appears above the GitHub CTA.
+  **Scope:** Only `components/install/*`.
+
+- [ ] Build Tweaks panel and compose final page, then verify all acceptance criteria
+  **Context:** Final wiring task. Build the dev-only Tweaks panel (env-gated). Compose `app/page.tsx` with all 8 sections in order. Ensure `app/layout.tsx` imports real `Nav`/`Footer`/`Tweaks`. Run all gates.
+  **Files to create:**
+  - `components/tweaks.tsx` — **client** component (`'use client';`). Top guard: `if (process.env.NEXT_PUBLIC_TWEAKS !== '1') return null;`. UI: a small fixed-position panel (bottom-right) with controls for:
+    - Theme: `dark` / `light` (writes `data-theme`, persists to `retro:theme`).
+    - Accent: `orange` / `green` / `cyan` / `magenta` (writes `data-accent`, persists to `retro:accent`).
+    - Scanlines: `on` / `off` (writes `data-scanlines`, persists to `retro:scanlines`).
+    - Hero variant: `kanban` / `draft` / `pipeline` (writes `data-hero-variant`, persists to `retro:hero-variant`).
+    All mutations use helpers from `lib/theme.ts` or inline `document.documentElement.setAttribute(...) + localStorage.setItem(...)`.
+  - `components/tweaks.module.css` — fixed-position panel styling.
+  **Files to modify:**
+  - `app/page.tsx` — replace placeholder. Compose sections in spec order with section `id`s matching nav anchors:
+    ```tsx
+    import Hero from '@/components/hero/hero';
+    import Pipeline from '@/components/pipeline/pipeline';
+    import Features from '@/components/features/features';
+    import Shortcuts from '@/components/shortcuts/shortcuts';
+    import Constitution from '@/components/constitution/constitution';
+    import Install from '@/components/install/install';
+    export default function Page() {
+      return (<>
+        <section id="hero"><Hero/></section>
+        <section id="how-it-works"><Pipeline/></section>
+        <section id="features"><Features/></section>
+        <section id="shortcuts"><Shortcuts/></section>
+        <section id="constitution"><Constitution/></section>
+        <section id="install"><Install/></section>
+      </>);
+    }
+    ```
+    (Top nav + footer come from `app/layout.tsx`.)
+  - `app/layout.tsx` — replace any placeholder `<Nav/>` / `<Footer/>` / `<Tweaks/>` with real imports from `@/components/nav`, `@/components/footer`, `@/components/tweaks`.
+  **Verification (run each and confirm; include output in Summary):**
+  1. `bun install` → exit 0.
+  2. `bun run typecheck` → exit 0.
+  3. `bun run lint` → exit 0.
+  4. `bun run build` → exit 0, no warnings.
+  5. `bun run start &` (after build), open `http://localhost:3000/` — confirm all 8 sections render in order: Nav, Hero, Pipeline, Features, Shortcuts, Constitution, Install, Footer.
+  6. Theme toggle flips `<html data-theme>`, reload preserves, no FOUC.
+  7. Pipeline auto-advances; hover step jumps within one frame.
+  8. Constitution toggles update `<pre>` same-render; timestamp regenerates.
+  9. Install tab swap works; copy button flashes `copied` ~1.4s.
+  10. 720px viewport → shortcut grid 2-col; 1080px → center nav links hidden.
+  11. `prefers-reduced-motion: reduce` → pipeline renders all events instantly; no caret/spinner animation.
+  12. Chrome console: zero errors/warnings on cold load.
+  13. Page source contains `macOS` in title, meta description, hero pill, hero meta row, install prereq #1, install callout strip.
+  14. Tab from page load → first focus is visible "Skip to content" link.
+  **Acceptance criteria:** All 13 items in spec §Acceptance Criteria pass. In particular:
+  - `bun run build` exits 0.
+  - `bun run typecheck` exits 0.
+  - `bun run lint` exits 0.
+  - `/` renders all 8 sections in the specified order.
+  - `tweaks.tsx` returns `null` when `process.env.NEXT_PUBLIC_TWEAKS !== '1'`.
+  **Scope:** Create `components/tweaks.tsx`, `components/tweaks.module.css`. Modify `app/page.tsx` (replace placeholder) and `app/layout.tsx` (wire real imports). Do not modify any other section component beyond fixing bugs surfaced by verification — if a bug requires a larger fix outside this task's scope, note it in the Retro section and implement the minimum fix in scope.
 
 # Summary
 
