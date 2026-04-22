@@ -809,7 +809,7 @@ N/A — no agent code in this feature.
   **Constraints:** No Tailwind. No CSS-in-JS. Icons come from `lucide-react` (not added to any file in this task — reserved for component tasks). Do not remove or reorder any existing rule in `styles.css` during the port; only modify the `--font-mono` line and append new blocks at the bottom.
   **Scope:** Create only the files above. Do not create any `components/` files in this task.
 
-- [ ] Build shared primitives (terminal-window, kbd, section-head, copy-button, footer-shortcuts)
+- [x] Build shared primitives (terminal-window, kbd, section-head, copy-button, footer-shortcuts)
   **Context:** Presentation primitives used by every section. Location: `components/primitives/`. CSS Module file `primitives.module.css` holds all primitive styles. Token classes `.dim .br .acc` etc. are global (in `app/globals.css`).
   **Files to create:**
   - `components/primitives/terminal-window.tsx` — server component. Props: `{ title?: string; subtitle?: string; rightSlot?: React.ReactNode; children: React.ReactNode; className?: string; }`. Renders a rounded panel with 1px `var(--border)`, background `var(--bg-panel)`, padding, header row (title in `var(--text-bright)`, subtitle in `var(--text-dim)`, `rightSlot` right-aligned) above children. No title → omit header row.
@@ -832,7 +832,7 @@ N/A — no agent code in this feature.
   - `Kbd` wraps content in literal `[` `]` brackets.
   **Scope:** Only `components/primitives/*`. Do not modify `app/`, `lib/`, or any other component directory.
 
-- [ ] Build Nav, ThemeToggle, and Footer components
+- [x] Build Nav, ThemeToggle, and Footer components
   **Context:** Sticky top nav + page footer. Reference copy: `design/reference/src/nav.jsx` and `design/reference/src/footer.jsx`. Icons from `lucide-react`: `Github`, `Sun`, `Moon`, `ArrowRight`. Theme toggle flips `data-theme` on `<html>` between `dark`/`light` and persists to `localStorage` via helpers from `lib/theme.ts`.
   **Files to create:**
   - `components/nav.tsx` — server component; `<header>` that is sticky top with backdrop blur (styles in `nav.module.css` or inline via CSS Modules). Left: brand caret + wordmark. Center: anchor links to `#how-it-works`, `#features`, `#shortcuts`, `#constitution`, `#install` (labels lifted from `design/reference/src/nav.jsx`; if missing, use slugs `How it works`, `Features`, `Shortcuts`, `Constitution`, `Install`). Right: `<ThemeToggle/>`, GitHub link `<a href="https://github.com/" aria-label="GitHub repo" target="_blank" rel="noreferrer">` with `<Github/>` icon, `Install` CTA button → `href="#install"` with `<ArrowRight/>` icon. Responsive: center links hidden at `≤1080px`; secondary CTAs (GitHub link) hidden at `≤720px` via media queries in the module CSS.
@@ -1072,3 +1072,14 @@ N/A — no agent code in this feature.
 - `eslint-config-next` v16 flat config imported as default exports from `eslint-config-next/core-web-vitals` and `eslint-config-next/typescript` subpaths (matches Next 16 docs). Added `design/reference/**` to ignores so the prototype JSX doesn't block lint.
 - `tsconfig.json` `include` also has `.next/dev/types/**/*.ts` (not in spec); kept — harmless and matches what `next build`/Turbopack generate.
 - `bun install` / `bun run typecheck` / `bun run lint` / `bun run build` all exit 0 against Next 16.2.4 + React 19.
+
+## Task 3 — Nav, ThemeToggle, Footer
+
+- Reference `design/reference/src/nav.jsx` does not exist as a standalone file — `TopNav` lives inside `design/reference/src/app.jsx`. Used it as the reference. Reference uses lowercase slug labels (`how`, `features`, …) and anchors like `#how`; spec explicitly specifies `#how-it-works` plus capitalized labels (`How it works`, `Features`, …) as the fallback — followed spec.
+- Reference Install CTA uses `<Kbd>↵</Kbd>`; spec overrides with `<ArrowRight/>` icon. Followed spec.
+- `ThemeToggle` uses `useSyncExternalStore` with a `MutationObserver` on `<html>` so the icon stays in sync if another source (e.g. Tweaks panel) changes `data-theme`. `getServerSnapshot` returns `'dark'` to match the SSR default on `<html data-theme="dark">`; second `useSyncExternalStore` call gates the mount so first paint always renders `<Moon/>` to avoid hydration mismatch, then swaps to the real icon post-mount.
+- Footer: reference has 3 link groups (Product, Resources, Source) + a brand column = 4 total grid columns. Spec's "Product, Community, Legal, Links" was only the fallback for when the reference lacked groups; reference does have groups, so lifted those verbatim (Product / Resources / Source). External "Source" group links point to `https://github.com/` with `target="_blank" rel="noreferrer"` — reference used `#` placeholders.
+- Footer status: reference renders `● all systems nominal` as plain text; spec calls for "pulsing green dot + operational" pill — built pill with `@keyframes foot-pulse` on a 6px green dot, bordered/tinted container, `operational` in uppercase.
+- Reduced-motion media query inside both `nav.module.css` and `footer.module.css` disables the caret-blink and footer status-pulse animations locally (defense in depth — the global reduced-motion block in `globals.css` targets `html::before` per spec, which doesn't cover module-scoped keyframes).
+- `app/layout.tsx` already imported real `Nav` / `Footer` from Task 1 scaffold — no placeholder swap needed. Spec permitted this swap; noting no-op.
+- `bun run typecheck` / `bun run lint` / `bun run build` all exit 0.

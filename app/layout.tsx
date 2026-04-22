@@ -3,6 +3,8 @@ import { JetBrains_Mono, IBM_Plex_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
+import { Nav } from '@/components/nav';
+import { Footer } from '@/components/footer';
 import './globals.css';
 
 const jetbrainsMono = JetBrains_Mono({
@@ -56,9 +58,9 @@ export default function RootLayout({
         <a href="#main" className="skip-link">
           Skip to content
         </a>
-        <div data-placeholder="nav" />
+        <Nav />
         <main id="main">{children}</main>
-        <div data-placeholder="footer" />
+        <Footer />
         <div data-placeholder="tweaks" />
         <Analytics />
         <SpeedInsights />
