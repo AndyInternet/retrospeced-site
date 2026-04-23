@@ -970,7 +970,7 @@ N/A — no agent code in this feature.
   - Toggling all rules off shows `// no rules active — chaos mode` in dim italic.
   **Scope:** `components/constitution/*`. If `rules.ts` already exists from Features task, verify it matches spec and extend with `buildConstitutionMarkdown` if missing.
 
-- [ ] Build Install section (tabs + prereqs + copy buttons)
+- [x] Build Install section (tabs + prereqs + copy buttons)
   **Context:** Tabbed commands ("from source" / "standalone binary") with copy buttons per line. Prereqs list (macOS prepended). Callout strip above GitHub CTA. Copy lifted **verbatim** from `design/reference/src/install.jsx` for commands, prereqs (except the prepended macOS item), and CTA copy.
   **Files to create:**
   - `components/install/install.tsx` — **client** component (`'use client';`). Exports (co-located):
@@ -1137,3 +1137,19 @@ N/A — no agent code in this feature.
 - **State init via lazy initializer**: `useState(() => Object.fromEntries(RULES.map(...)))` so the `defaultOn` map is built once on mount, not on every render. Spec-neutral optimization.
 - Verified acceptance: `bun run typecheck` / `bun run lint` / `bun run build` all exit 0. `constitution.tsx` starts with `'use client';`; `rules.ts` has no `'use client'`. `RULES.length === 11` and all 11 ids (`tdd`, `defensive-programming`, `smallest-changeset`, `type-safety`, `documentation`, `reuse-existing-patterns`, `incremental-testing`, `lint-compliance`, `no-new-deps`, `cleanup-tech-debt`, `caveman-mode`) match spec verbatim. Clicking a toggle calls `setOn` → re-render → fresh `nowIso` + new markdown string → `<pre>` updates same tick. Header strip shows `.retro/constitution.md · toggles` on left, `● {n}/11 active` with accent dot on right.
 - `constitution.tsx` not yet wired into `app/page.tsx` — page composition is Task 10. Task 8 only builds the component.
+
+## Task 9 — Install section
+
+- **Lifted SectionHead eyebrow/title/sub from `design/reference/src/install.jsx` verbatim** (`quickstart` / `Running in ninety seconds.` / `You'll need bun, the Claude Code CLI…`). Spec task card showed a placeholder title `Install in under a minute.` but explicitly said "lift from reference if present; otherwise use the values shown here" — reference values present, used them. Flagging the divergence from the task-card placeholder since the acceptance criteria don't pin the copy.
+- **Comment-line `text` stored without the leading `#`.** Reference stored the `#` inside the `c` field (`"# clone"`); I store just `clone` and render the `#` prefix via the component. Two reasons: (a) spec says "comments in `var(--text-dim)` with `#` prefix" which reads as the component owning the prefix, (b) keeps the data shape honest — the `#` is presentational, not data. Commands (`kind: 'cmd'`) have no prefix in `text`, so `CopyButton` copies the raw command with nothing to strip.
+- **`CopyButton` only on `cmd` lines, not `comment` lines.** Spec: "Each command line has `<CopyButton text={line.text}/>` on the right." Comments are context, not runnable — no copy button. Keeps the visual quieter.
+- **`useId()` for tab / panel ids.** Ensures uniqueness if multiple `<Install/>` ever mount on one page and matches React 18+ SSR-safe patterns.
+- **Roving `tabIndex` on tabs (`tabIndex={isActive ? 0 : -1}`)** — lightweight touch of the WAI-ARIA tabs pattern so Tab key only lands on the active tab; left-right arrow key nav wasn't asked for in the spec so I didn't add it (simplest reasonable default).
+- **Both panels rendered, inactive hidden via `hidden` attribute.** Visible panel body content only renders when `isActive` (avoids mounting CopyButton timers for the hidden panel). `aria-labelledby` / `aria-controls` ids are stable whether or not body is mounted.
+- **Prereq list gains numbered counters via CSS `counter-increment`** (`counter-reset: step` on `<ul>`, `::before` with `counter(step, decimal-leading-zero)` on each `<li>`). Reference uses the same counter pattern in `styles.css` (`install-card .steps li::before`); replicated locally since the global `.install-card` class isn't used here.
+- **Star-on-GitHub CTA links to `https://github.com/` as a placeholder.** Reference `href="#"`; spec never pinned the destination. Left a plausible placeholder — Task 10 (page composition) or a later doc-polish pass can point it at the real repo URL.
+- **`Github` icon from `lucide-react` used per task spec.** Replaces the reference's inline `<Icon name="gh"/>`. Sized `14` strokeWidth `1.75` to sit naturally inside `.btn.primary` (matches the visual weight of Feather/Lucide icons in the rest of the app).
+- **`overflow-x: auto` + `white-space: nowrap` on `.lineText`** so long commands (`git clone github.com/you/retrospeced-tui` is the longest, ~38 chars) don't wrap at narrow widths but scroll horizontally within the code block — preserves the monospace line-grid.
+- **Two-column grid collapses at ≤900px** to match the Features/Constitution breakpoint and the design README (`@900: install stack`).
+- Verified acceptance: `bun run typecheck` / `bun run lint` / `bun run build` all exit 0. `install.tsx` starts with `'use client';`. `PREREQS[0]` is `{ title: 'macOS 13+ (Ventura or later)', sub: 'Linux & Windows coming — star the repo to follow along.' }` (sub includes `Linux & Windows coming`). Exactly one tab has `aria-selected={true}` at any time (derived from single `active` state). `CopyButton` primitive was already built in Task 2 with 1400ms revert. Callout strip renders dim line `Currently macOS-only. Cross-platform support is on the roadmap.` directly left of the `Star on GitHub` primary button.
+- `install.tsx` not yet wired into `app/page.tsx` — page composition is Task 10. Task 9 only builds the component.
