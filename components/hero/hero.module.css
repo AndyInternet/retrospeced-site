@@ -1,0 +1,305 @@
+/* ===== Hero terminal container ===== */
+
+.heroTerminal {
+  min-width: 0;
+  width: 100%;
+}
+
+/* ===== Kanban ===== */
+
+.kanbanTopBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.kanbanTopLeft,
+.kanbanTopRight {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.kanbanTopSpacer {
+  white-space: pre;
+}
+
+.kanbanGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 860px) {
+  .kanbanGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.kanbanColumn {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kanbanColHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.kanbanColLabel {
+  font-weight: 700;
+}
+
+.kanbanColCount {
+  white-space: pre;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.kanbanCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 260px;
+}
+
+.kanbanCardListDim {
+  opacity: 0.7;
+}
+
+/* ===== Kanban card ===== */
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 9px;
+  background: var(--bg-panel);
+  font-size: 12px;
+  line-height: 1.45;
+  transition: border-color 120ms;
+}
+
+.card:hover {
+  border-color: var(--border-active);
+}
+
+.cardSelected {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent-weak);
+}
+
+.cardFailed {
+  border-color: var(--red) !important;
+}
+
+.cardId {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.cardLine {
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* ===== Kanban footer ===== */
+
+.kanbanFooter {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+/* ===== Draft info bar ===== */
+
+.infoBar {
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* ===== Draft split ===== */
+
+.draftSplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 860px) {
+  .draftSplit {
+    grid-template-columns: 1fr;
+  }
+}
+
+.draftPanel {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 10px;
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 340px;
+}
+
+.draftPanelFocused {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.draftPanelUnfocused {
+  opacity: 0.85;
+}
+
+.draftPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+
+/* ===== Chat messages (left-border-only blocks) ===== */
+
+.chatMessages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.msgBlock {
+  border-left: 3px solid var(--border);
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.msgPm {
+  border-left-color: var(--cyan);
+}
+
+.msgUser {
+  border-left-color: var(--accent);
+}
+
+.msgTool {
+  border-left-color: var(--yellow);
+}
+
+.msgHeader {
+  font-weight: 700;
+  font-size: 11.5px;
+  margin-bottom: 2px;
+}
+
+.msgBody {
+  color: var(--text);
+}
+
+/* ===== Chat input ===== */
+
+.chatInput {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  resize: none;
+}
+
+.chatInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.chatInputFooter {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ===== Draft footer ===== */
+
+.draftFooter {
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+/* ===== Pipeline terminal (hero variant) ===== */
+
+.pipeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.pipeHeaderLeft {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  background: var(--accent-weak);
+  border: 1px solid var(--accent-weak);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+  animation: heroPipePulse 1.8s ease-in-out infinite;
+}
+
+@keyframes heroPipePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.pipeLog {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  min-height: 300px;
+}
+
+.pipeLine {
+  display: block;
+}
