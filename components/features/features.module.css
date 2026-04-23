@@ -1,0 +1,46 @@
+/* ===== Features section grid =====
+ * 12-col grid with mixed card spans: 6 (default), 12 (wide), 4 (third).
+ * Mirrors the `.feat-grid` / `.feat` rules in globals.css so scoped and
+ * global class names stay behaviourally identical. At <=900px, all cards
+ * collapse to a single column.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+
+.card {
+  grid-column: span 6;
+}
+
+.cardWide {
+  grid-column: span 12;
+}
+
+.cardThird {
+  grid-column: span 4;
+}
+
+@media (max-width: 900px) {
+  .card,
+  .cardWide,
+  .cardThird {
+    grid-column: span 12;
+  }
+}
+
+/* Inner grid inside card 03 — "deep maps" side-by-side mocks */
+.deepmapGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .deepmapGrid {
+    grid-template-columns: 1fr;
+  }
+}
