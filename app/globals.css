@@ -89,7 +89,7 @@ body::before {
   z-index: 999;
   mix-blend-mode: overlay;
 }
-[data-scanlines="off"]::before { display: none; }
+[data-scanlines="off"] body::before { display: none; }
 
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -897,5 +897,5 @@ footer.foot {
     animation-iteration-count: 1 !important;
     transition-duration: 0ms !important;
   }
-  html::before { display: none !important; }
+  html::before, body::before { display: none !important; }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
-import { Bolt, ArrowRight, Github } from 'lucide-react';
+import { Zap, ArrowRight, Github } from 'lucide-react';
 import Kanban from './kanban.tsx';
 import Draft from './draft';
 import PipelineTerm from './pipeline-term';
@@ -79,7 +79,7 @@ export default function Hero() {
                 className="btn primary"
                 onClick={copy}
               >
-                <Bolt size={13} /> {copied ? 'copied' : 'Install retro'}
+                <Zap size={13} /> {copied ? 'copied' : 'Install retro'}
               </button>
               <a className="btn" href="#how-it-works">
                 How it works <ArrowRight size={13} />
