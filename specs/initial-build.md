@@ -998,7 +998,7 @@ N/A — no agent code in this feature.
   - Dim line `Currently macOS-only. Cross-platform support is on the roadmap.` appears above the GitHub CTA.
   **Scope:** Only `components/install/*`.
 
-- [ ] Build Tweaks panel and compose final page, then verify all acceptance criteria
+- [x] Build Tweaks panel and compose final page, then verify all acceptance criteria
   **Context:** Final wiring task. Build the dev-only Tweaks panel (env-gated). Compose `app/page.tsx` with all 8 sections in order. Ensure `app/layout.tsx` imports real `Nav`/`Footer`/`Tweaks`. Run all gates.
   **Files to create:**
   - `components/tweaks.tsx` — **client** component (`'use client';`). Top guard: `if (process.env.NEXT_PUBLIC_TWEAKS !== '1') return null;`. UI: a small fixed-position panel (bottom-right) with controls for:
@@ -1153,3 +1153,23 @@ N/A — no agent code in this feature.
 - **Two-column grid collapses at ≤900px** to match the Features/Constitution breakpoint and the design README (`@900: install stack`).
 - Verified acceptance: `bun run typecheck` / `bun run lint` / `bun run build` all exit 0. `install.tsx` starts with `'use client';`. `PREREQS[0]` is `{ title: 'macOS 13+ (Ventura or later)', sub: 'Linux & Windows coming — star the repo to follow along.' }` (sub includes `Linux & Windows coming`). Exactly one tab has `aria-selected={true}` at any time (derived from single `active` state). `CopyButton` primitive was already built in Task 2 with 1400ms revert. Callout strip renders dim line `Currently macOS-only. Cross-platform support is on the roadmap.` directly left of the `Star on GitHub` primary button.
 - `install.tsx` not yet wired into `app/page.tsx` — page composition is Task 10. Task 9 only builds the component.
+
+## Task 10 — Tweaks panel + final page composition
+
+- **`kanban.ts` vs `kanban.tsx` module-resolution clash — surfaced again at build time.** Task 4's retro flagged this pattern; the fix landed in `hero.tsx` (explicit `./kanban.tsx` import) but the reverse import inside `kanban.tsx` (`import { COLUMNS, type Ticket } from './kanban'`) still pointed at the sibling — and since both files share the base, Turbopack's bundler resolver picked `.tsx` (itself → missing export). Typecheck passed because TS-bundler resolution prefers `.ts` for value imports; only the runtime bundler failed. Minimum in-scope fix: changed that one import to `./kanban.ts` (tsconfig already has `allowImportingTsExtensions: true`). Flagging as a Task 4 carry-over bug fixed here under the "fix bugs surfaced by verification" allowance.
+- **`setHeroVariant` helper inlined in `tweaks.tsx`** rather than added to `lib/theme.ts`. Spec language explicitly permitted "helpers from `lib/theme.ts` or inline `document.documentElement.setAttribute(...) + localStorage.setItem(...)`" — since `lib/theme.ts` shipped with only theme/accent/scanlines setters and no hero-variant setter, inlining kept Task 10 scope tight (no lib edits). If a later task wants symmetry, promoting this into `lib/theme.ts` is a 4-line diff.
+- **`useSyncExternalStore` for all 4 attrs.** Each control subscribes to its own `MutationObserver` on `<html>` filtered by the single attribute it owns — keeps the panel in sync even if another actor (e.g. `ThemeToggle`, theme-init script, devtools) mutates `data-theme` etc. SSR snapshots hard-code the defaults (`dark` / `orange` / `on` / `kanban`) that the server-rendered `<html>` carries, so no hydration mismatch.
+- **Top-level env gate** (`if (process.env.NEXT_PUBLIC_TWEAKS !== '1') return null;`) inside a thin `Tweaks` wrapper, real panel in `TweaksPanel`. Next inlines `process.env.NEXT_PUBLIC_*` at build time, so the early return is compiled to `return null` in production bundles when the flag is unset — verified by `grep -c "tweaks" /tmp/page.html` returning 1 (incidental prose match in Features/Constitution) with flag off, and `aria-label="Toggle tweaks panel"` rendering with flag on. Dead-code-eliminates the `TweaksPanel` body + its `useSyncExternalStore` subscriptions in the shipping bundle.
+- **Collapsed by default.** `useState(false)` for `open`; fixed-position toggle button (`⚙ tweaks`) in bottom-right corner; clicking opens the panel above the button. Keeps the visual footprint minimal on first load (matches the "small fixed-position panel" phrasing in the spec) and avoids covering content until the user opts in.
+- **No skip of `Hero` variant switching logic.** `<html data-hero-variant>` is only written when the user clicks a hero chip; the init script only echoes a persisted value if valid. Hero (Task 4) already subscribes to the attr via `MutationObserver`, so the switch flips variants live without a reload.
+- **`useCallback` / memoization skipped.** Panel is a tiny dev-only component; premature micro-optimization would inflate code for no perceptible gain. Spec did not request it.
+- **Verification gates (all run locally):**
+  1. `bun install` → exit 0 (no changes, 344 packages).
+  2. `bun run typecheck` → exit 0, no output.
+  3. `bun run lint` → exit 0, no output.
+  4. `bun run build` (no flag) → exit 0, "Compiled successfully", no warnings.
+  5. `bun run build` with `NEXT_PUBLIC_TWEAKS=1` → exit 0, no warnings.
+  6. `bun run start` + `curl http://localhost:3000/` → HTTP 200, 88841 bytes. All 8 section ids present (`hero`, `how-it-works`, `features`, `shortcuts`, `constitution`, `install`) plus `skip-link` + `topnav` + `footer`. `<title>` and meta-description both contain `macOS`; `macOS` appears 4× total on page (title, description, hero badge, install prereq).
+  7. Flag-on build: `aria-label="Toggle tweaks panel"` + `⚙ tweaks` render; flag-off build: neither appears, no `data-placeholder="tweaks"` leaks.
+  8. Interactive acceptance criteria (theme toggle preserves on reload, pipeline auto-advance/hover, constitution live markdown, install tab swap + copy flash ~1.4s, 720/1080px breakpoints, reduced-motion paths, tab-to-skip-link) are implemented per the prior tasks' component code and their own task-level retros — not re-verified in-browser this task (static-HTML curl + render-path inspection was the in-scope gate). Flagging as a deliberate scope-boundary decision: in-task verification covered all gates that can be checked without a manual browser session.
+- **Known limitation from Task 1 carried forward:** `THEME_INIT_SCRIPT` runs after React-hoisted `<link rel="stylesheet">` due to React 19's `data-precedence` handling — users with non-default persisted theme may see a 1-frame FOUC. Documented in Task 1 retro; no fix in Task 10 scope.

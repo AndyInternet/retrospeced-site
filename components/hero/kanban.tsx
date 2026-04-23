@@ -4,7 +4,7 @@ import { TerminalWindow } from '@/components/primitives/terminal-window';
 import { Kbd } from '@/components/primitives/kbd';
 import { FooterShortcuts } from '@/components/primitives/footer-shortcuts';
 import { useBrailleSpinner } from '@/lib/braille';
-import { COLUMNS, type Ticket } from './kanban';
+import { COLUMNS, type Ticket } from './kanban.ts';
 import styles from './hero.module.css';
 
 export default function Kanban() {

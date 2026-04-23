@@ -5,6 +5,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { THEME_INIT_SCRIPT } from '@/lib/theme';
 import { Nav } from '@/components/nav';
 import { Footer } from '@/components/footer';
+import { Tweaks } from '@/components/tweaks';
 import './globals.css';
 
 const jetbrainsMono = JetBrains_Mono({
@@ -61,7 +62,7 @@ export default function RootLayout({
         <Nav />
         <main id="main">{children}</main>
         <Footer />
-        <div data-placeholder="tweaks" />
+        <Tweaks />
         <Analytics />
         <SpeedInsights />
       </body>

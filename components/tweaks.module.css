@@ -1,0 +1,92 @@
+.root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.panel {
+  background: var(--panel, #0d0d0d);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowLabel {
+  color: var(--text-dim, #888);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.rowOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  appearance: none;
+  background: transparent;
+  color: var(--text-dim, #888);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font: inherit;
+  cursor: pointer;
+  text-transform: lowercase;
+  line-height: 1.4;
+}
+
+.chip:hover {
+  color: var(--text, #eee);
+  border-color: var(--accent, #ff6f1f);
+}
+
+.chip[data-active='true'] {
+  color: var(--bg, #000);
+  background: var(--accent, #ff6f1f);
+  border-color: var(--accent, #ff6f1f);
+}
+
+.toggle {
+  appearance: none;
+  background: var(--panel, #0d0d0d);
+  color: var(--text-dim, #888);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.toggle:hover {
+  color: var(--text, #eee);
+  border-color: var(--accent, #ff6f1f);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .toggle {
+    transition: none;
+  }
+}
