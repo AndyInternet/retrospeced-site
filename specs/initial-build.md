@@ -936,7 +936,7 @@ N/A — no agent code in this feature.
   - Card 05 displays first 6 rule labels from `RULES`.
   **Scope:** Create `components/features/*` and optionally `components/constitution/rules.ts`. Do not create `components/constitution/constitution.tsx` — that's the Constitution task.
 
-- [ ] Build Shortcuts section (21 entries, 3-col desktop, 2-col mobile)
+- [x] Build Shortcuts section (21 entries, 3-col desktop, 2-col mobile)
   **Context:** Static section. Data: 21 entries per spec §Shortcuts data contract. Grid layout: 3 columns at desktop, 2 columns at `≤720px`. Each entry cell: `<Kbd>{keys}</Kbd>` on the left, description in `var(--text)`, context tag in `var(--text-dim)` on the right.
   **Files to create:**
   - `components/shortcuts/data.ts` — exports `Shortcut` interface and `SHORTCUTS: Shortcut[]` with all 21 entries **verbatim** from spec §Shortcuts:
@@ -1114,3 +1114,14 @@ N/A — no agent code in this feature.
 - **Inline styles retained.** Reference inline styles on card 02 (borderBottom + padding), card 03 (`paddingLeft: 12`, `marginBottom: 8`), card 04 (`fontFamily: 'var(--font-mono)'`), card 05 (`padding: '4px 12px'`), and the `<code>` accent color were preserved. Moving them into the module would expand scope without visual benefit.
 - Verified acceptance: `bun run typecheck` / `bun run lint` / `bun run build` all exit 0. Grid renders 8 cards — 5 `feat ${styles.card}` (01, 02, 04, 05 are `span 6`), 1 `feat wide ${styles.cardWide}` (03, `span 12`), 3 `feat third ${styles.cardThird}` (06, 07, 08, `span 4`). At ≤900px the module media query collapses all four classes (`.card/.cardWide/.cardThird` + globals `.feat.wide/.feat.third`) to `span 12`. Card 05 renders the first 6 `RULES` entries with `.rule-row on` toggled by `defaultOn`.
 - `features.tsx` is not yet wired into `app/page.tsx` — page composition is Task 10. This task only builds the component per spec.
+
+## Task 7 — Shortcuts section
+
+- **`Kbd` order is the spec-literal change.** Task context is explicit: `<Kbd>{keys}</Kbd>` on the left, description, then context on the right. Reference `design/reference/src/shortcuts.jsx` renders the opposite layout (desc+ctx stack on the left, `<Kbd>` on the right, inside a column wrapper). Followed the task directive over the reference.
+- **Global `.kbd-grid`/`.kbd-cell` rules already exist** in `globals.css` (lifted from `design/reference/styles.css` during Task 1) and encode the opposite layout (`justify-content: space-between` + `.kbd-cell-inner` column). Scope is bounded to `components/shortcuts/*`, so I didn't touch globals. The module defines its own `.grid` + `.cell` rules with matching chrome (border, border-radius, bg-panel, hover, 13px font) so behavior is parity-equivalent and the globals remain dormant for this section. Flagging: the global `.kbd-grid`/`.kbd-cell` selectors are now unused — a future cleanup task could delete them or re-point the globals at the new order.
+- **Context span carries both `styles.ctx` and the global `dim` utility.** Task context says "context tag in `var(--text-dim)` on the right" and lists the cell as `<span className="dim">{context}</span>`. `styles.ctx` handles layout + uppercase + letter-spacing + font-size; global `dim` handles the color token. Double-declaration is intentional — `dim` gives the literal className from the task spec; module owns the non-color layout.
+- **Desc color: task says `var(--text)`; reference uses `--text-bright`.** Followed task verbatim — `.desc` is `var(--text)`. This is a visible contrast change vs the reference prototype.
+- **Grid breakpoints.** `repeat(3, 1fr)` at desktop; `@media (max-width: 720px)` swaps to `repeat(2, 1fr)`. Exactly what spec §Shortcuts grid contract mandates.
+- **Server component.** No `'use client'` — data static, no state, no effects. Default export matches the import pattern `import Shortcuts from '@/components/shortcuts/shortcuts'` used in the page composition example (Task 10 owns the wire-up).
+- **Cell key = `${keys}-${desc}`.** All 21 rows are unique on this tuple; avoids the `key={i}` anti-pattern the reference used.
+- Verified acceptance: `bun run typecheck` / `bun run lint` / `bun run build` all exit 0. `SHORTCUTS.length === 21` (counted against spec data contract — all 21 entries lifted verbatim with identical ordering, whitespace normalized vs reference-JSX alignment padding). Grid CSS: 3-col at ≥721px, 2-col at ≤720px, confirmed by inspection of the module.
