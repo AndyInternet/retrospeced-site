@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # Next.js
 next-env.d.ts
 .vercel
+
+# macOS
+.DS_Store
+**/.DS_Store

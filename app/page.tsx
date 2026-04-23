@@ -8,24 +8,14 @@ import Install from '@/components/install/install';
 export default function Page() {
   return (
     <>
-      <section id="hero">
-        <Hero />
-      </section>
+      <Hero />
       <section id="how-it-works">
         <Pipeline />
       </section>
-      <section id="features">
-        <Features />
-      </section>
-      <section id="shortcuts">
-        <Shortcuts />
-      </section>
-      <section id="constitution">
-        <Constitution />
-      </section>
-      <section id="install">
-        <Install />
-      </section>
+      <Features />
+      <Shortcuts />
+      <Constitution />
+      <Install />
     </>
   );
 }

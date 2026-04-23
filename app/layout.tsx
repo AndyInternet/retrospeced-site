@@ -51,6 +51,7 @@ export default function RootLayout({
       data-accent="orange"
       data-scanlines="on"
       className={`${jetbrainsMono.variable} ${ibmPlexMono.variable}`}
+      suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />

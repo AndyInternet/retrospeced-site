@@ -70,6 +70,7 @@ export default function Constitution() {
             </div>
             <pre
               className={`${styles.preview} ${activeCount === 0 ? styles.previewEmpty : ''}`}
+              suppressHydrationWarning
             >
               {markdown}
             </pre>
